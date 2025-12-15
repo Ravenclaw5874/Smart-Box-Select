@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Smart Box Select",
     "author": "R4V3N",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (4, 2, 0),
     "location": "View3D > Toolbar",
     "description": "Box/Lasso select with object activation .",
@@ -80,20 +80,18 @@ class VIEW3D_OT_smart_box_select(bpy.types.Operator):
     bl_label = "Smart Box Select"
     bl_options = {'REGISTER', 'UNDO'}
 
-    def __init__(self):
-        self.start_mouse = Vector((0, 0))
-        self.end_mouse = Vector((0, 0))
-        self.is_dragging = False
-        self._handle = None
+    # Blender API Guideline Update:
+    # __init__ removed to avoid subclassing issues. Properties initialized in invoke.
 
     def invoke(self, context, event):
         if context.space_data.type != 'VIEW_3D':
             return {'CANCELLED'}
 
+        # Initialize properties here instead of __init__
         self.start_mouse = Vector((event.mouse_region_x, event.mouse_region_y))
         self.end_mouse = self.start_mouse
         self.is_dragging = True
-
+        
         self._handle = bpy.types.SpaceView3D.draw_handler_add(self.draw_callback_px, (context,), 'WINDOW', 'POST_PIXEL')
         context.window_manager.modal_handler_add(self)
         
@@ -117,7 +115,7 @@ class VIEW3D_OT_smart_box_select(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def finish(self, context, event):
-        if self._handle:
+        if getattr(self, '_handle', None):
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             self._handle = None
         
@@ -143,13 +141,13 @@ class VIEW3D_OT_smart_box_select(bpy.types.Operator):
         find_closest_and_set_active(context, self.end_mouse)
 
     def cancel(self, context):
-        if self._handle:
+        if getattr(self, '_handle', None):
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             self._handle = None
         context.area.tag_redraw()
 
     def draw_callback_px(self, context):
-        if not self.is_dragging:
+        if not getattr(self, 'is_dragging', False):
             return
 
         shader = gpu.shader.from_builtin('UNIFORM_COLOR')
@@ -183,15 +181,14 @@ class VIEW3D_OT_smart_lasso_select(bpy.types.Operator):
     bl_label = "Smart Lasso Select"
     bl_options = {'REGISTER', 'UNDO'}
 
-    def __init__(self):
-        self.path = [] 
-        self.is_dragging = False
-        self._handle = None
+    # Blender API Guideline Update:
+    # __init__ removed.
 
     def invoke(self, context, event):
         if context.space_data.type != 'VIEW_3D':
             return {'CANCELLED'}
 
+        # Initialize properties here instead of __init__
         self.path = [Vector((event.mouse_region_x, event.mouse_region_y))]
         self.is_dragging = True
 
@@ -220,7 +217,7 @@ class VIEW3D_OT_smart_lasso_select(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def finish(self, context, event):
-        if self._handle:
+        if getattr(self, '_handle', None):
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             self._handle = None
 
@@ -264,22 +261,21 @@ class VIEW3D_OT_smart_lasso_select(bpy.types.Operator):
             find_closest_and_set_active(context, self.path[-1])
 
     def cancel(self, context):
-        if self._handle:
+        if getattr(self, '_handle', None):
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             self._handle = None
         context.area.tag_redraw()
 
     def draw_callback_px(self, context):
         # 점이 2개 미만이면 그릴 모양이 없음
-        if not self.is_dragging or len(self.path) < 2:
+        is_dragging = getattr(self, 'is_dragging', False)
+        if not is_dragging or len(self.path) < 2:
             return
 
         shader = gpu.shader.from_builtin('UNIFORM_COLOR')
         vertices = [ (p.x, p.y) for p in self.path ]
         
         # --- 1. 내부 채우기 (Fill) ---
-        # TRI_FAN을 사용하여 다각형 내부를 채웁니다.
-        # 복잡한 오목 다각형에서는 완벽하지 않을 수 있지만, 시각적 피드백 용도로는 충분합니다.
         batch_fill = batch_for_shader(shader, 'TRI_FAN', {"pos": vertices})
 
         gpu.state.blend_set('ALPHA')
@@ -290,7 +286,6 @@ class VIEW3D_OT_smart_lasso_select(bpy.types.Operator):
         batch_fill.draw(shader)
         
         # --- 2. 외곽선 그리기 (Outline) ---
-        # LINE_STRIP 대신 LINE_LOOP를 사용하여 마지막 점과 시작 점을 연결합니다.
         batch_outline = batch_for_shader(shader, 'LINE_LOOP', {"pos": vertices})
 
         # 흰색 실선 (약간 더 투명하게)
