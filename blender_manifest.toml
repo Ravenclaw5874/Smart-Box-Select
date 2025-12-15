@@ -1,0 +1,10 @@
+schema_version = "1.0.0"
+id = "smart_box_select"
+name = "Smart Box Select"
+version = "1.0.0"
+tagline = "Box/Lasso select with object activation"
+maintainer = "R4V3N"
+type = "add-on"
+tags = ["User Interface", "3D View"]
+blender_version_min = "4.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
