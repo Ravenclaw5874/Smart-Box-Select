@@ -1,10 +1,10 @@
 bl_info = {
     "name": "Smart Box Select",
     "author": "R4V3N",
-    "version": (1, 0, 1),
+    "version": (1, 0, 2),
     "blender": (4, 2, 0),
     "location": "View3D > Toolbar",
-    "description": "Box/Lasso select with object activation .",
+    "description": "Box/Lasso select with object activation. Clicks select single objects.",
     "category": "Selection",
 }
 
@@ -80,14 +80,10 @@ class VIEW3D_OT_smart_box_select(bpy.types.Operator):
     bl_label = "Smart Box Select"
     bl_options = {'REGISTER', 'UNDO'}
 
-    # Blender API Guideline Update:
-    # __init__ removed to avoid subclassing issues. Properties initialized in invoke.
-
     def invoke(self, context, event):
         if context.space_data.type != 'VIEW_3D':
             return {'CANCELLED'}
 
-        # Initialize properties here instead of __init__
         self.start_mouse = Vector((event.mouse_region_x, event.mouse_region_y))
         self.end_mouse = self.start_mouse
         self.is_dragging = True
@@ -119,6 +115,19 @@ class VIEW3D_OT_smart_box_select(bpy.types.Operator):
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             self._handle = None
         
+        # --- [수정됨] 클릭 판별 로직 추가 ---
+        # 시작점과 끝점 사이의 거리가 5픽셀 미만이면 단순 클릭으로 처리
+        drag_distance = (self.end_mouse - self.start_mouse).length
+        if drag_distance < 5.0:
+            bpy.ops.view3d.select(
+                extend=event.shift,
+                deselect=event.ctrl,
+                toggle=event.shift, # 보통 Shift 클릭은 토글 동작
+                location=(int(self.end_mouse.x), int(self.end_mouse.y))
+            )
+            return
+        # -----------------------------------
+
         xmin = int(min(self.start_mouse.x, self.end_mouse.x))
         xmax = int(max(self.start_mouse.x, self.end_mouse.x))
         ymin = int(min(self.start_mouse.y, self.end_mouse.y))
@@ -181,14 +190,10 @@ class VIEW3D_OT_smart_lasso_select(bpy.types.Operator):
     bl_label = "Smart Lasso Select"
     bl_options = {'REGISTER', 'UNDO'}
 
-    # Blender API Guideline Update:
-    # __init__ removed.
-
     def invoke(self, context, event):
         if context.space_data.type != 'VIEW_3D':
             return {'CANCELLED'}
 
-        # Initialize properties here instead of __init__
         self.path = [Vector((event.mouse_region_x, event.mouse_region_y))]
         self.is_dragging = True
 
@@ -202,7 +207,7 @@ class VIEW3D_OT_smart_lasso_select(bpy.types.Operator):
 
         if event.type == 'MOUSEMOVE':
             pos = Vector((event.mouse_region_x, event.mouse_region_y))
-            # 성능 최적화: 너무 가까운 점은 무시 (약간 완화하여 부드럽게)
+            # 성능 최적화: 너무 가까운 점은 무시
             if len(self.path) == 0 or (pos - self.path[-1]).length_squared > 2.0:
                 self.path.append(pos)
 
@@ -221,8 +226,25 @@ class VIEW3D_OT_smart_lasso_select(bpy.types.Operator):
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             self._handle = None
 
-        if not self.path or len(self.path) < 3:
+        if not self.path:
             return
+
+        # --- [수정됨] 클릭 판별 로직 추가 ---
+        # 시작점과 마지막 점(현재 마우스 위치)의 거리가 짧거나, 경로 점이 너무 적으면 클릭 처리
+        start_pos = self.path[0]
+        end_pos = self.path[-1]
+        drag_distance = (end_pos - start_pos).length
+        
+        # 점이 3개 미만이거나 드래그 거리가 5픽셀 미만인 경우
+        if len(self.path) < 3 or drag_distance < 5.0:
+            bpy.ops.view3d.select(
+                extend=event.shift,
+                deselect=event.ctrl,
+                toggle=event.shift,
+                location=(int(event.mouse_region_x), int(event.mouse_region_y))
+            )
+            return
+        # -----------------------------------
 
         # 1. 모드 확인
         sel_mode = 'SET'
@@ -267,7 +289,6 @@ class VIEW3D_OT_smart_lasso_select(bpy.types.Operator):
         context.area.tag_redraw()
 
     def draw_callback_px(self, context):
-        # 점이 2개 미만이면 그릴 모양이 없음
         is_dragging = getattr(self, 'is_dragging', False)
         if not is_dragging or len(self.path) < 2:
             return
@@ -281,14 +302,14 @@ class VIEW3D_OT_smart_lasso_select(bpy.types.Operator):
         gpu.state.blend_set('ALPHA')
         shader.bind()
         
-        # 반투명 회색 설정 (Box Select와 동일하게 맞춤)
+        # 반투명 회색 설정
         shader.uniform_float("color", (0.8, 0.8, 0.8, 0.1))
         batch_fill.draw(shader)
         
         # --- 2. 외곽선 그리기 (Outline) ---
         batch_outline = batch_for_shader(shader, 'LINE_LOOP', {"pos": vertices})
 
-        # 흰색 실선 (약간 더 투명하게)
+        # 흰색 실선
         shader.uniform_float("color", (1.0, 1.0, 1.0, 0.6))
         batch_outline.draw(shader)
         
@@ -303,7 +324,7 @@ class VIEW3D_WST_smart_box_select(bpy.types.WorkSpaceTool):
     bl_context_mode = 'OBJECT'
     bl_idname = "my_tool.smart_box_select"
     bl_label = "Smart Box Select"
-    bl_description = "Box select. Activates closest object on release."
+    bl_description = "Box select. Short click selects single object."
     bl_icon = "ops.generic.select_box"
     bl_keymap = (
         ("view3d.smart_box_select", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
@@ -318,7 +339,7 @@ class VIEW3D_WST_smart_lasso_select(bpy.types.WorkSpaceTool):
     bl_context_mode = 'OBJECT'
     bl_idname = "my_tool.smart_lasso_select"
     bl_label = "Smart Lasso Select"
-    bl_description = "Lasso select. Activates closest object on release."
+    bl_description = "Lasso select. Short click selects single object."
     bl_icon = "ops.generic.select_lasso"
     bl_keymap = (
         ("view3d.smart_lasso_select", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
