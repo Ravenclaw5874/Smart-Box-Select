@@ -4,7 +4,7 @@ bl_info = {
     "version": (1, 0, 2),
     "blender": (4, 2, 0),
     "location": "View3D > Toolbar",
-    "description": "Box/Lasso select with object activation. Clicks select single objects.",
+    "description": "Box/Lasso select with object activation.",
     "category": "Selection",
 }
 
@@ -324,7 +324,7 @@ class VIEW3D_WST_smart_box_select(bpy.types.WorkSpaceTool):
     bl_context_mode = 'OBJECT'
     bl_idname = "my_tool.smart_box_select"
     bl_label = "Smart Box Select"
-    bl_description = "Box select. Short click selects single object."
+    bl_description = "Box select. Activates closest object on release."
     bl_icon = "ops.generic.select_box"
     bl_keymap = (
         ("view3d.smart_box_select", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
@@ -339,7 +339,7 @@ class VIEW3D_WST_smart_lasso_select(bpy.types.WorkSpaceTool):
     bl_context_mode = 'OBJECT'
     bl_idname = "my_tool.smart_lasso_select"
     bl_label = "Smart Lasso Select"
-    bl_description = "Lasso select. Short click selects single object."
+    bl_description = "Lasso select. Activates closest object on release."
     bl_icon = "ops.generic.select_lasso"
     bl_keymap = (
         ("view3d.smart_lasso_select", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
@@ -373,3 +373,4 @@ def unregister():
 
 if __name__ == "__main__":
     register()
+
